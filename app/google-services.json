@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "788585646622",
+    "project_id": "eventhive-9f2ae",
+    "storage_bucket": "eventhive-9f2ae.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:788585646622:android:2c0d93e4db34bca5effc0f",
+        "android_client_info": {
+          "package_name": "gautam.projects.event_hive"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "788585646622-u0fgnvojt6nq7gsbvuu0v69unj01pd75.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "gautam.projects.event_hive",
+            "certificate_hash": "d51b24db5e0b1a0fa96793b6615026afde262b81"
+          }
+        },
+        {
+          "client_id": "788585646622-2as0021mssvsn198u5rfnucbfdb7itlb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC0cghixCkTxvehwSqMk18Q182pQAEwlzw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "788585646622-2as0021mssvsn198u5rfnucbfdb7itlb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
