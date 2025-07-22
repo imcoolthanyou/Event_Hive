@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,19 +18,23 @@ import gautam.projects.event_hive.Presentation.screens.AddEventScreen
 import gautam.projects.event_hive.Presentation.screens.NotificationScreen
 import gautam.projects.event_hive.Presntation.ViewModel.NotificationViewModel
 import gautam.projects.event_hive.Presntation.screens.*
+import gautam.projects.event_hive.core.helper.NotificationViewModelFactory
 import gautam.projects.event_hive.screens.AuthScreen
 
 @Composable
 fun NavigationControl(
-    startEventId: String? = null
+    startEventId: String? = null // For handling deep links from notifications
 ) {
     val navController = rememberNavController()
+
+    // This effect will run once if a startEventId is provided (e.g., from a notification)
+    // and navigate to the correct event details screen.
     LaunchedEffect(startEventId) {
         startEventId?.let {
-            navController.navigate("eventInfo/$it")
+            // ✅ FIX: Use the type-safe helper function to create the route
+            navController.navigate(Routes.EventInfoScreen.createRoute(it))
         }
     }
-    val context = LocalContext.current
 
     val startDestination = remember {
         if (Firebase.auth.currentUser != null) {
@@ -50,13 +55,6 @@ fun NavigationControl(
                 }
             )
         }
-        composable(
-            route = "event_info/{eventId}",
-            deepLinks = listOf(navDeepLink { uriPattern = "eventhive://event_info/{eventId}" })
-        ) { backStackEntry ->
-            val eventId = backStackEntry.arguments?.getString("eventId")
-            EventInfoScreen(navController,eventId = eventId)
-        }
 
         composable(Routes.BottomNavigation.route) {
             BottomNavigation(navController = navController)
@@ -71,14 +69,19 @@ fun NavigationControl(
         }
 
         composable(Routes.NotificationScreen.route) {
-            val vm = remember { NotificationViewModel(context) }
+            val context = LocalContext.current
+            val vm: NotificationViewModel = viewModel(
+                factory = NotificationViewModelFactory(context)
+            )
             NotificationScreen(navController, vm)
         }
 
-        // ✅ VERIFIED: This is the correct way to define the route and its argument
+        // ✅ FIX: This is now the SINGLE, correct definition for the EventInfoScreen route.
+        // It includes the route pattern, the argument definition, and the deep link.
         composable(
             route = Routes.EventInfoScreen.route,
-            arguments = listOf(navArgument("eventId") { type = NavType.StringType })
+            arguments = listOf(navArgument("eventId") { type = NavType.StringType }),
+            deepLinks = listOf(navDeepLink { uriPattern = "eventhive://event_info/{eventId}" })
         ) { backStackEntry ->
             EventInfoScreen(
                 navController = navController,
@@ -90,7 +93,7 @@ fun NavigationControl(
             TicketScreen(navController = navController)
         }
 
-        composable(Routes.AddEventScreen.route){
+        composable(Routes.AddEventScreen.route) {
             AddEventScreen(navController = navController)
         }
     }

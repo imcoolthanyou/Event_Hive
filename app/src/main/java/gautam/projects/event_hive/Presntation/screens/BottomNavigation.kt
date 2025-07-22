@@ -1,6 +1,5 @@
 package gautam.projects.event_hive.Presntation.screens
 
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -25,16 +24,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import gautam.projects.event_hive.Data.model.NavItem
-import gautam.projects.event_hive.Presentation.screens.HomeScreen
 import gautam.projects.event_hive.Presntation.ViewModel.EventsViewModel
-import gautam.projects.event_hive.Presntation.ViewModel.NotificationViewModel
 import gautam.projects.event_hive.core.Navigation.Routes
 
 @Composable
 fun BottomNavigation(navController: NavHostController) {
     val viewModel: EventsViewModel = viewModel()
     val myEvents by viewModel.myEvents.collectAsState()
-    val notificationViewModel: NotificationViewModel=viewModel()
 
     val items = listOf(
         NavItem("Home", Icons.Filled.Home, Icons.Outlined.Home),
@@ -55,7 +51,6 @@ fun BottomNavigation(navController: NavHostController) {
         floatingActionButton = {
             if (selectedItemTitle == "Home") {
                 FloatingActionButton(
-                    // ✅ UPDATED: This now navigates to the new AddEventScreen
                     onClick = { navController.navigate(Routes.AddEventScreen.route) },
                     shape = CircleShape,
                     containerColor = Color.Black,
@@ -77,10 +72,10 @@ fun BottomNavigation(navController: NavHostController) {
         ) {
             when (selectedItemTitle) {
                 "Home" -> HomeScreen(
-                    // ✅ UPDATED: The call to HomeScreen is now simplified
-                    eventsViewModel = viewModel,
-                    notificationViewModel = notificationViewModel,
-                   onEventClick = {navController.navigate("EventDetailsScreen")}
+                    navController = navController,
+                    viewModel=viewModel,
+
+                    onViewOnMapClick = { selectedItemTitle = "Map" }
                 )
                 "Search" -> SearchScreen(navController)
                 "Map" -> MapScreen()
@@ -98,6 +93,7 @@ fun BottomNavigation(navController: NavHostController) {
         }
     }
 }
+
 
 @Composable
 fun AppBottomNavigationBar(

@@ -20,37 +20,43 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
-import gautam.projects.event_hive.Presntation.ViewModel.EventsViewModel
 
-import gautam.projects.event_hive.Presntation.ViewModel.ProfileViewModel
-import gautam.projects.event_hive.core.helper.LocationAutocompleteTextField
+import gautam.projects.event_hive.Presntation.ViewModel.EventsViewModel
+import gautam.projects.event_hive.Presntation.ViewModel.SharedViewModel
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 
 @SuppressLint("MissingPermission")
 @Composable
-fun MapScreen() {
+fun MapScreen(
+    eventsViewModel: EventsViewModel = viewModel(),
+
+    ) {
+    val  sharedViewModel: SharedViewModel = viewModel()
     val context = LocalContext.current
-    var locationInputText by remember { mutableStateOf("") }
-
-    // ✅ Get instances of the ViewModels
-    val eventsViewModel: EventsViewModel = viewModel()
-    val profileViewModel: ProfileViewModel = viewModel()
-
-    // ✅ Collect the list of nearby events from the ViewModel
     val nearbyEvents by eventsViewModel.nearbyEvents.collectAsState()
+    val initialTargetState by sharedViewModel.initialMapTarget.collectAsState()
 
     val mapView = rememberMapViewWithLifecycle()
-    val mapController = mapView.controller
 
-    // --- Function to trigger event fetching ---
-    val fetchEventsForLocation = { lat: Double, lon: Double ->
-        eventsViewModel.fetchNearbyEvents(lat, lon)
-        mapController.animateTo(GeoPoint(lat, lon), 15.0, 1000L)
+    // --- This effect handles the intelligent zoom from other screens ---
+    LaunchedEffect(initialTargetState) {
+        initialTargetState?.let { state ->
+            if (state.zoomToFitEvents.isNotEmpty()) {
+                val points = state.zoomToFitEvents.map { GeoPoint(it.latitude, it.longitude) }
+                val boundingBox = BoundingBox.fromGeoPoints(points)
+                mapView.post {
+                    mapView.zoomToBoundingBox(boundingBox, true, 100) // 100px padding
+                }
+            } else if (state.singleTarget != null) {
+                mapView.controller.animateTo(state.singleTarget, 15.0, 1000L)
+            }
+            sharedViewModel.clearInitialMapTarget() // Reset the target
+        }
     }
 
-    // --- Location Permission Handling ---
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
@@ -58,10 +64,13 @@ fun MapScreen() {
                 val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
                 fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                     if (location != null) {
-                        // Permission granted, get location and fetch events
-                        fetchEventsForLocation(location.latitude, location.longitude)
+                        // Only fetch and zoom if no initial target was set
+                        if (initialTargetState == null) {
+                            eventsViewModel.fetchNearbyEvents(location.latitude, location.longitude)
+                            mapView.controller.animateTo(GeoPoint(location.latitude, location.longitude), 14.0, 1000L)
+                        }
                     } else {
-                        Toast.makeText(context, "Could not get current location.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Could not get location.", Toast.LENGTH_SHORT).show()
                     }
                 }
             } else {
@@ -70,7 +79,6 @@ fun MapScreen() {
         }
     )
 
-    // --- Initial Fetch on Screen Launch ---
     LaunchedEffect(Unit) {
         locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
     }
@@ -79,12 +87,10 @@ fun MapScreen() {
         AndroidView(
             factory = { mapView },
             update = { view ->
-                // ✅ The map now updates based on the nearbyEvents list
                 view.overlays.removeIf { it is Marker }
                 nearbyEvents.forEach { event ->
-                    val eventGeoPoint = GeoPoint(event.latitude, event.longitude)
                     val eventMarker = Marker(view)
-                    eventMarker.position = eventGeoPoint
+                    eventMarker.position = GeoPoint(event.latitude, event.longitude)
                     eventMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     eventMarker.title = event.title
                     eventMarker.snippet = event.locationAddress
@@ -95,28 +101,8 @@ fun MapScreen() {
             modifier = Modifier.fillMaxSize()
         )
 
-        // --- Autocomplete Search Bar ---
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            LocationAutocompleteTextField(
-                value = locationInputText,
-                onValueChange = { locationInputText = it },
-                onLocationSelected = { address ->
-                    locationInputText = address.getAddressLine(0)
-                    // When a location is searched, fetch events for that new location
-                    fetchEventsForLocation(address.latitude, address.longitude)
-                }
-            )
-        }
-
-        // --- "My Location" Floating Action Button ---
         FloatingActionButton(
             onClick = {
-                // Re-request permission and fetch for current location
                 locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
             },
             modifier = Modifier
@@ -127,6 +113,9 @@ fun MapScreen() {
         }
     }
 }
+
+// rememberMapViewWithLifecycle() composable remains the same
+
 
 @Composable
 fun rememberMapViewWithLifecycle(): MapView {

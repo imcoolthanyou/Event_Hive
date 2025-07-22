@@ -1,203 +1,298 @@
-package gautam.projects.event_hive.Presentation.screens
+package gautam.projects.event_hive.Presntation.screens
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.google.accompanist.swiperefresh.SwipeRefresh
-import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
-import com.valentinilk.shimmer.shimmer
+import androidx.navigation.NavController
+import coil.compose.rememberAsyncImagePainter
 import gautam.projects.event_hive.Data.model.SingleEvent
 import gautam.projects.event_hive.Presntation.ViewModel.EventsViewModel
-import gautam.projects.event_hive.Presntation.ViewModel.NotificationViewModel
-import gautam.projects.event_hive.Presntation.screens.EventCard
-
+import gautam.projects.event_hive.Presntation.ViewModel.SharedViewModel
+import gautam.projects.event_hive.R
+import gautam.projects.event_hive.core.Navigation.Routes
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onEventClick: (SingleEvent) -> Unit,
-    eventsViewModel: EventsViewModel = viewModel(),
-    notificationViewModel: NotificationViewModel = viewModel()
+    navController: NavController,
+    viewModel: EventsViewModel = viewModel(),
+    sharedViewModel: SharedViewModel = viewModel(), // Get the shared ViewModel
+    onViewOnMapClick: () -> Unit
 ) {
-    val context = LocalContext.current
-    val events by eventsViewModel.nearbyEvents.collectAsState()
-    val isLoadingNearby by eventsViewModel.isLoadingNearbyEvents.collectAsState()
-    val notifications by notificationViewModel.notifications.collectAsState()
+    val upcomingEvents by viewModel.upcomingEvents.collectAsState()
+    val nearbyEvents by viewModel.nearbyEvents.collectAsState()
 
-    val locationPermissionGranted = remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        )
+    var selectedDate by remember { mutableStateOf(Calendar.getInstance().time) }
+
+    val filteredEvents = remember(selectedDate, upcomingEvents) {
+        val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
+        val selectedDateStr = sdf.format(selectedDate)
+        upcomingEvents.filter { it.date == selectedDateStr }
     }
 
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        locationPermissionGranted.value = isGranted
-        if (isGranted) {
-            eventsViewModel.fetchNearbyEvents(28.6139, 77.2090)
+    val nearbyPreviewEvent = remember(filteredEvents, nearbyEvents) {
+        filteredEvents.firstOrNull { event ->
+            nearbyEvents.any { nearby -> nearby.id == event.id }
         }
     }
-
-    LaunchedEffect(Unit) {
-        if (!locationPermissionGranted.value) {
-            launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-        } else {
-            eventsViewModel.fetchNearbyEvents(28.6139, 77.2090)
-        }
-    }
-
-    val swipeRefreshState = rememberSwipeRefreshState(isRefreshing = isLoadingNearby)
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Nearby Events") },
-                actions = {
-                    if (notifications.isNotEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .size(12.dp)
-                                .padding(end = 12.dp)
-                                .align(Alignment.CenterVertically)
-                        ) {
-                            Surface(
-                                shape = MaterialTheme.shapes.small,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.fillMaxSize()
-                            ) {}
-                        }
-                    }
-                    IconButton(onClick = { notificationViewModel.showDummyNotification() }) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Test Notification")
-                    }
-                }
-            )
-        },
-        content = { paddingValues ->
-            SwipeRefresh(
-                state = swipeRefreshState,
-                onRefresh = {
-                    eventsViewModel.fetchNearbyEvents(28.6139, 77.2090)
-                },
-                modifier = Modifier.padding(paddingValues)
-            ) {
-                when {
-                    isLoadingNearby -> {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            repeat(5) {
-                                ShimmerEventCard()
-                            }
-                        }
-                    }
-
-                    events.isEmpty() -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("No nearby events found.")
-                        }
-                    }
-
-                    else -> {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(events) { event ->
-                                EventCard(singleEvent = event, onCardClick = { onEventClick(event) })
-                            }
+        topBar = { HomeTopBar(navController) },
+        containerColor = Color.White
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            item { CalendarView(selectedDate) { newDate -> selectedDate = newDate } }
+            item {
+                SectionHeader(
+                    title = "Upcoming Events",
+                    actionText = "My Events",
+                    onActionClick = { /* TODO: Navigate to My Events screen */ }
+                )
+            }
+            item {
+                if (filteredEvents.isEmpty()) {
+                    Text(
+                        "No events scheduled for this day.",
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxWidth(),
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filteredEvents, key = { it.id }) { event ->
+                            UpcomingEventCard(event = event, onEventClick = {
+                                navController.navigate(Routes.EventInfoScreen.createRoute(event.id))
+                            })
                         }
                     }
                 }
             }
+            item {
+                SectionHeader(
+                    title = "Nearby Events",
+                    actionText = "View on Map",
+                    onActionClick = {
+                        // Set the target for the MapScreen before navigating
+                        sharedViewModel.setInitialMapTarget(
+                            target = nearbyPreviewEvent?.let { GeoPoint(it.latitude, it.longitude) },
+                            zoomToFitAll = if (nearbyPreviewEvent == null) nearbyEvents else emptyList()
+                        )
+                        onViewOnMapClick() // This switches the tab in BottomNavigation
+                    }
+                )
+            }
+            item { NearbyEventsPreview(nearbyEvent = nearbyPreviewEvent) }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeTopBar(navController: NavController) {
+    TopAppBar(
+        title = { Text("Event Hive", fontWeight = FontWeight.Bold, color = Color.Black) },
+        navigationIcon = {
+            IconButton(onClick = { navController.navigate("Profile") }) {
+                Icon(Icons.Default.Person, contentDescription = "Profile")
+            }
+        },
+        actions = {
+            IconButton(onClick = { navController.navigate(Routes.SearchScreen.route) }) {
+                Icon(Icons.Default.Search, contentDescription = "Search")
+            }
+            IconButton(onClick = { navController.navigate(Routes.NotificationScreen.route) }) {
+                Icon(Icons.Default.Notifications, contentDescription = "Notifications")
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
     )
 }
 
+@Composable
+fun CalendarView(selectedDate: Date, onDateSelected: (Date) -> Unit) {
+    val calendar = Calendar.getInstance()
+    calendar.time = Date() // Start from today
+    val dates = remember {
+        List(30) {
+            calendar.time.also { calendar.add(Calendar.DAY_OF_YEAR, 1) }
+        }
+    }
+    val dayFormat = SimpleDateFormat("EEE", Locale.getDefault())
+    val dateFormat = SimpleDateFormat("dd", Locale.getDefault())
+    val selectedDayFormat = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
 
-
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            items(dates) { date ->
+                val isSelected = selectedDayFormat.format(date) == selectedDayFormat.format(selectedDate)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                        .clickable { onDateSelected(date) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = dayFormat.format(date).uppercase(),
+                        color = if (isSelected) Color.White else Color.Gray,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = dateFormat.format(date),
+                        color = if (isSelected) Color.White else Color.Black,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
-fun ShimmerEventCard() {
+fun SectionHeader(title: String, actionText: String, onActionClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black
+        )
+        TextButton(onClick = onActionClick) {
+            Text(actionText, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun UpcomingEventCard(event: SingleEvent, onEventClick: () -> Unit) {
     Card(
         modifier = Modifier
-            .padding(16.dp)
-            .size(width = 430.dp, height = 530.dp)
-            .shimmer(),
+            .width(220.dp)
+            .height(250.dp)
+            .clickable(onClick = onEventClick),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
-        shape = RoundedCornerShape(16.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(10.dp)) {
-            Box(
+        Column {
+            Image(
+                painter = rememberAsyncImagePainter(
+                    model = event.imageUrls.firstOrNull(),
+                    error = painterResource(id = R.drawable.placeholder_event)
+                ),
+                contentDescription = event.title,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(300.dp)
-                    .background(Color.LightGray, RoundedCornerShape(8.dp))
+                    .height(150.dp),
+                contentScale = ContentScale.Crop
             )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.6f)
-                    .height(20.dp)
-                    .background(Color.Gray.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.4f)
-                    .height(16.dp)
-                    .background(Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.3f)
-                    .height(16.dp)
-                    .background(Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row {
-                Box(
-                    modifier = Modifier
-                        .width(120.dp)
-                        .height(40.dp)
-                        .background(Color.Gray.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = event.title,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.width(12.dp))
-                Box(
-                    modifier = Modifier
-                        .width(100.dp)
-                        .height(40.dp)
-                        .background(Color.Gray.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = event.locationAddress,
+                    fontSize = 12.sp,
+                    color = Color.Gray,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun NearbyEventsPreview(nearbyEvent: SingleEvent?) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(200.dp)
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { context ->
+                MapView(context).apply {
+                    setTileSource(TileSourceFactory.MAPNIK)
+                    isVerticalMapRepetitionEnabled = false
+                    setMultiTouchControls(false)
+                }
+            },
+            update = { mapView ->
+                mapView.overlays.clear()
+                if (nearbyEvent != null) {
+                    val geoPoint = GeoPoint(nearbyEvent.latitude, nearbyEvent.longitude)
+                    mapView.controller.setZoom(15.0)
+                    mapView.controller.setCenter(geoPoint)
+                    val marker = Marker(mapView)
+                    marker.position = geoPoint
+                    marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    mapView.overlays.add(marker)
+                }
+                mapView.invalidate()
+            }
+        )
+        if (nearbyEvent == null) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Text("No nearby events for this day.", color = Color.Gray)
             }
         }
     }
