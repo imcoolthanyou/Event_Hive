@@ -7,7 +7,9 @@ sealed class Routes(val route: String) {
     object EditScreen : Routes("edit_profile")
     object SearchScreen : Routes("search")
     object NotificationScreen : Routes("notifications")
-    object TicketScreen : Routes("ticket")
+    object TicketScreen : Routes("ticket/{eventId}"){
+        fun createRoute(eventId: String) = "ticket/$eventId"
+    }
 
     // ✅ UPDATED: The route now defines an argument for eventId
     object EventInfoScreen : Routes("event_info/{eventId}") {

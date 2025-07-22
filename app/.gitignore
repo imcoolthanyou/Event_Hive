@@ -1,2 +1,28 @@
+# === Build ===
 /build
+/app/build
+/.gradle
+/local.properties
+.gradle/
+
+# === IDE ===
+.idea/
+*.iml
+
+# === Sensitive files ===
 /app/src/main/java/gautam/projects/event_hive/ApiKeys.kt
+*.keystore
+*.jks
+*.jar
+*.env
+
+# === OS files ===
+.DS_Store
+Thumbs.db
+
+# === Log & crash files ===
+*.log
+
+# === Generated ===
+*.apk
+*.ap_

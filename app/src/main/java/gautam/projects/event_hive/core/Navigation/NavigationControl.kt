@@ -3,7 +3,6 @@ package gautam.projects.event_hive.core.Navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -76,8 +75,7 @@ fun NavigationControl(
             NotificationScreen(navController, vm)
         }
 
-        // ✅ FIX: This is now the SINGLE, correct definition for the EventInfoScreen route.
-        // It includes the route pattern, the argument definition, and the deep link.
+
         composable(
             route = Routes.EventInfoScreen.route,
             arguments = listOf(navArgument("eventId") { type = NavType.StringType }),
@@ -89,8 +87,11 @@ fun NavigationControl(
             )
         }
 
-        composable(Routes.TicketScreen.route) {
-            TicketScreen(navController = navController)
+        composable(Routes.TicketScreen.route,
+            arguments = listOf(navArgument("eventId"){type = NavType.StringType})) {backStackEntry ->
+
+            TicketScreen(navController = navController,
+                eventId = backStackEntry.arguments?.getString("eventId"))
         }
 
         composable(Routes.AddEventScreen.route) {
