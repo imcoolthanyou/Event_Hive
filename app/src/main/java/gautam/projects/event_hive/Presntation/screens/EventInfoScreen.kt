@@ -56,8 +56,7 @@ fun EventInfoScreen(
             if (event != null && event!!.ticketsAvailable > 0) {
                 ExtendedFloatingActionButton(
                     onClick = {
-                        viewModel.bookTicket(eventId!!)
-                        navController.navigate(Routes.TicketScreen.route)
+                        navController.navigate(Routes.TicketScreen.createRoute(eventId!!))
                     },
                     icon = { Icon(Icons.Default.ConfirmationNumber, contentDescription = null) },
                     text = { Text("Get Tickets (${event?.ticketsAvailable} left)") }
