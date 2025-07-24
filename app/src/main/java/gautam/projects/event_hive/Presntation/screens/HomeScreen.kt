@@ -46,7 +46,7 @@ import java.util.*
 fun HomeScreen(
     navController: NavController,
     viewModel: EventsViewModel = viewModel(),
-    sharedViewModel: SharedViewModel = viewModel(), // Get the shared ViewModel
+    sharedViewModel: SharedViewModel = viewModel(),
     onViewOnMapClick: () -> Unit
 ) {
     val upcomingEvents by viewModel.upcomingEvents.collectAsState()
@@ -54,15 +54,20 @@ fun HomeScreen(
 
     var selectedDate by remember { mutableStateOf(Calendar.getInstance().time) }
 
-    val filteredEvents = remember(selectedDate, upcomingEvents) {
+    val currentUserId =viewModel.userId
+
+
+    val filteredEvents = remember(selectedDate, upcomingEvents, currentUserId) {
         val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
         val selectedDateStr = sdf.format(selectedDate)
-        upcomingEvents.filter { it.date == selectedDateStr }
+        upcomingEvents.filter {
+            it.date == selectedDateStr && it.createdBy != currentUserId
+        }
     }
 
-    val nearbyPreviewEvent = remember(filteredEvents, nearbyEvents) {
+    val nearbyPreviewEvent = remember(filteredEvents, nearbyEvents, currentUserId) {
         filteredEvents.firstOrNull { event ->
-            nearbyEvents.any { nearby -> nearby.id == event.id }
+            event.createdBy!= currentUserId && nearbyEvents.any { nearby -> nearby.id == event.id }
         }
     }
 

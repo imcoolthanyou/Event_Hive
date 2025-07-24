@@ -2,10 +2,12 @@ package gautam.projects.event_hive.Presntation.ViewModel
 
 import android.location.Address
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.ktx.auth
-import com.google.firebase.ktx.Firebase
+import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.functions.FirebaseFunctions
 import gautam.projects.event_hive.Data.Repository.EventsRepository
 import gautam.projects.event_hive.Data.Repository.ProfileRepository
 import gautam.projects.event_hive.Data.Repository.StorageRepository
@@ -15,14 +17,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.*
 
 class EventsViewModel : ViewModel() {
 
+     val userId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+
     private val eventsRepository = EventsRepository()
     private val profileRepository = ProfileRepository()
     private val storageRepository = StorageRepository()
+    private val functions = FirebaseFunctions.getInstance()
 
     val myEvents: StateFlow<List<SingleEvent>> = eventsRepository.myEvents
     val nearbyEvents: StateFlow<List<SingleEvent>> = eventsRepository.nearbyEvents
@@ -39,6 +45,9 @@ class EventsViewModel : ViewModel() {
 
     private val _isLoadingNearbyEvents = MutableStateFlow(false)
     val isLoadingNearbyEvents: StateFlow<Boolean> = _isLoadingNearbyEvents.asStateFlow()
+
+    private val _razorpayOrderResponse = MutableStateFlow<Map<String, Any>?>(null)
+    val razorpayOrderResponse = _razorpayOrderResponse.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -61,7 +70,7 @@ class EventsViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             _isCreating.value = true
-            val userId = Firebase.auth.currentUser?.uid.orEmpty()
+            val userId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
             val imageUrls = imgUris.mapNotNull { uri -> storageRepository.uploadImage(uri) }
 
             val newEvent = SingleEvent(
@@ -75,7 +84,8 @@ class EventsViewModel : ViewModel() {
                 description = description,
                 imageUrls = imageUrls,
                 totalTickets = totalTickets,
-                ticketsAvailable = totalTickets
+                ticketsAvailable = totalTickets,
+                createdBy = userId
             )
 
             eventsRepository.addEvent(newEvent)
@@ -108,15 +118,38 @@ class EventsViewModel : ViewModel() {
         viewModelScope.launch {
             val success = eventsRepository.bookTicketForEvent(eventId)
             if (success) {
-                // After booking, refresh the event details to show the updated ticket count
                 getEventById(eventId)
             }
-            // TODO: Add a StateFlow<Event> for showing a success/failure Snackbar message
         }
     }
 
+    fun createRazorpayOrder(amountInRupees: Int) {
+        viewModelScope.launch {
+            try {
+                val data = hashMapOf(
+                    "amount" to amountInRupees * 100, // convert to paise
+                    "currency" to "INR"
+                )
+
+                val result = functions
+                    .getHttpsCallable("createRazorpayOrder")
+                    .call(data)
+                    .await()
+
+                _razorpayOrderResponse.value = result.data as? Map<String, Any>
+            } catch (e: Exception) {
+                Log.e("EventsViewModel", "Error calling createRazorpayOrder", e)
+                _razorpayOrderResponse.value = null
+            }
+        }
+    }
+
+    fun clearOrderResponse() {
+        _razorpayOrderResponse.value = null
+    }
+
     fun logOut() {
-        Firebase.auth.signOut()
+        FirebaseAuth.getInstance().signOut()
     }
 
     private fun parseDate(dateString: String): Date? {
@@ -129,14 +162,12 @@ class EventsViewModel : ViewModel() {
 
     private fun isFutureOrToday(dateString: String): Boolean {
         val eventDate = parseDate(dateString) ?: return false
-        val today = Calendar.getInstance()
-
-        // Reset time component of today to compare dates only
-        today.set(Calendar.HOUR_OF_DAY, 0)
-        today.set(Calendar.MINUTE, 0)
-        today.set(Calendar.SECOND, 0)
-        today.set(Calendar.MILLISECOND, 0)
-
+        val today = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
         return !eventDate.before(today.time)
     }
 }

@@ -28,6 +28,7 @@ cloudinary = "2.4.0"
 firebaseBom = "33.2.0"
 googleServicesPlugin = "4.4.2"
 playServicesAuth = "21.2.0"
+navigationRuntimeAndroid = "2.9.2"
 
 [libraries]
 # AndroidX Core & Lifecycle
@@ -66,6 +67,7 @@ firebase-auth = { module = "com.google.firebase:firebase-auth" }
 firebase-firestore-ktx = { module = "com.google.firebase:firebase-firestore-ktx" }
 firebase-storage-ktx = { module = "com.google.firebase:firebase-storage-ktx" }
 play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
+androidx-navigation-runtime-android = { group = "androidx.navigation", name = "navigation-runtime-android", version.ref = "navigationRuntimeAndroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }
