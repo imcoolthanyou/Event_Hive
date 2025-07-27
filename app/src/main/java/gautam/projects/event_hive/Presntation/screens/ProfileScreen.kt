@@ -1,3 +1,6 @@
+
+
+
 // ProfileScreen.kt
 package gautam.projects.event_hive.Presntation.screens
 
@@ -23,40 +26,51 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 import gautam.projects.event_hive.Data.model.ProfileEvent
 import gautam.projects.event_hive.Data.model.User
+import gautam.projects.event_hive.Presntation.ViewModel.EventsViewModel
 
-// --- Placeholder Data (Replace with Firebase data later) ---
 val placeholderUser = User(
-    name = "Ethan Carter",
-    email = "ethan.carter@email.com",
-    profilePictureUrl = "https://as1.ftcdn.net/v2/jpg/13/65/97/94/1000_F_1365979484_QoVvZV7q2D4FD6pMJjspYAzOA96PFvRn.jpg" // Use a real URL for testing
+    name = Firebase.auth.currentUser?.displayName,
+    email = Firebase.auth.currentUser?.email,
+    profilePictureUrl = Firebase.auth.currentUser?.photoUrl
 )
 
-val myEventsList = listOf(
-    ProfileEvent("https://as1.ftcdn.net/v2/jpg/12/38/09/96/1000_F_1238099609_tCeVeJoK9pVRPwwRM9239OJfhMxJRdxt.jpg", "Indie Rock Night", "Fri, Jul 12", "The Roxy"),
-    ProfileEvent("https://as2.ftcdn.net/v2/jpg/05/90/74/27/1000_F_590742789_10VxOHDKZl4oyVWaqyIWgwo7Sd0TV7i0.jpg", "Stand-Up Comedy Show", "Sat, Jul 13", "The Laugh Factory")
+val savedEventsPhoto = listOf(
+    "https://as2.ftcdn.net/v2/jpg/02/83/73/23/1000_F_283732383_2MNtILcHQlzyTE1LJDzm166yixf5MlKF.jpg",
+    "https://as1.ftcdn.net/v2/jpg/01/78/36/16/1000_F_178361629_XUW8h3TErFqqcNxtrZyRR6NNEasZ6iQU.jpg"
 )
 
-val savedEventsList = listOf(
-    ProfileEvent("https://as2.ftcdn.net/v2/jpg/02/83/73/23/1000_F_283732383_2MNtILcHQlzyTE1LJDzm166yixf5MlKF.jpg", "Summer Music Festival", "Sat, Aug 3, 2:00 PM", "Grand Park, Los Angeles"),
-    ProfileEvent("https://as1.ftcdn.net/v2/jpg/01/78/36/16/1000_F_178361629_XUW8h3TErFqqcNxtrZyRR6NNEasZ6iQU.jpg", "Artisan Food Market", "Sun, Aug 4, 11:00 AM", "The Grove, Los Angeles")
-)
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun ProfileScreen(navController: NavController) {
+fun ProfileScreen(navController: NavController,
+                  viewModel: EventsViewModel,
+                  onLogOut: () -> Unit){
+
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("My Events", "Saved Events")
+
+    val myEvents = viewModel.myEvents.collectAsState().value.map {
+        ProfileEvent(it.imageUrls, it.title, it.date, it.locationAddress, id = it.id)
+    }
+    val savedEventsList =viewModel.savedEvent.collectAsState().value.map {
+        ProfileEvent(it.imageUrls, it.title, it.date, it.locationAddress, id = it.id)
+    }
+
+    val eventsToShow = if (selectedTabIndex == 0) myEvents else savedEventsList
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Profile", fontWeight = FontWeight.Bold,
-                    color = Color.Black) },
+                title = { Text("Profile", fontWeight = FontWeight.Bold, color = Color.Black) },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.White)
             )
         },
@@ -68,18 +82,15 @@ fun ProfileScreen(navController: NavController) {
                 .padding(innerPadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // --- Profile Header ---
             item {
                 ProfileHeader(
                     user = placeholderUser,
                     onEditClick = {
-                        // Navigate to the Edit Profile screen
-                            navController.navigate("EditScreen")
+                        navController.navigate("edit_profile")
                     }
                 )
             }
 
-            // --- Sticky Tabs ---
             stickyHeader {
                 ProfileTabs(
                     selectedTabIndex = selectedTabIndex,
@@ -88,14 +99,33 @@ fun ProfileScreen(navController: NavController) {
                 )
             }
 
-            // --- Conditional Event List ---
-            val eventsToShow = if (selectedTabIndex == 0) myEventsList else savedEventsList
-            items(eventsToShow) { event ->
-                EventListItem(event = event, onClick = { /* TODO: Navigate to event details */ })
+            if (eventsToShow.isEmpty()) {
+                item {
+                    Text(
+                        text = "No events found.",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.Gray
+                    )
+                }
+            } else {
+                items(eventsToShow) { event ->
+                    EventListItem(
+                        event = event,
+                        onClick = {
+                            navController.navigate("event_info/${event.id}")
+                        }
+                    )
+                }
             }
         }
     }
+
+    //TODO: the owner of the event cant see the ticket screen so we have to make the admin screen in which we are gonna make them see their respective sales etc
+
+
 }
+
 
 @Composable
 fun ProfileHeader(user: User, onEditClick: () -> Unit) {
@@ -132,9 +162,9 @@ fun ProfileHeader(user: User, onEditClick: () -> Unit) {
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = user.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        user.name?.let { Text(text = it, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,color = MaterialTheme.colorScheme.primary) }
         Spacer(modifier = Modifier.height(4.dp))
-        Text(text = user.email, style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+        user.email?.let { Text(text = it, style = MaterialTheme.typography.bodyLarge, color = Color.Black) }
     }
 }
 
@@ -170,8 +200,8 @@ fun EventListItem(event: ProfileEvent, onClick: () -> Unit) {
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Image(
-                painter = rememberAsyncImagePainter(model = event.imageUrl),
+            AsyncImage(
+                model = event.imageUrl.firstOrNull(),
                 contentDescription = event.title,
                 modifier = Modifier
                     .size(80.dp)

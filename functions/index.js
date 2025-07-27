@@ -2,13 +2,11 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const Razorpay = require("razorpay");
-const cors = require("cors")({ origin: true });
 
 admin.initializeApp();
 
-// This is the main function that your app will call.
+// ✅ RAZORPAY FUNCTION — remains unchanged
 exports.createRazorpayOrder = functions.https.onCall(async (data, context) => {
-  // Check if the user is authenticated.
   if (!context.auth) {
     throw new functions.https.HttpsError(
       "unauthenticated",
@@ -16,12 +14,9 @@ exports.createRazorpayOrder = functions.https.onCall(async (data, context) => {
     );
   }
 
-  // Get the amount and currency from the app's request.
-  const amount = data.amount; // in paise, e.g., 1000 for ₹10.00
-  const currency = data.currency; // e.g., "INR"
+  const amount = data.amount;
+  const currency = data.currency;
 
-  // --- IMPORTANT: Set your Razorpay keys securely ---
-  // We will set these using the terminal, NOT hardcode them here.
   const razorpayKeyId = functions.config().razorpay.key_id;
   const razorpayKeySecret = functions.config().razorpay.key_secret;
 
@@ -37,10 +32,8 @@ exports.createRazorpayOrder = functions.https.onCall(async (data, context) => {
   };
 
   try {
-    // Ask Razorpay to create the order.
     const order = await instance.orders.create(options);
     console.log("Razorpay Order Created:", order);
-    // Send the order details back to your app.
     return { orderId: order.id, amount: order.amount };
   } catch (error) {
     console.error("Razorpay order creation failed:", error);
@@ -50,3 +43,51 @@ exports.createRazorpayOrder = functions.https.onCall(async (data, context) => {
     );
   }
 });
+
+exports.notifyOnNewEvent = functions.firestore
+  .document("events/{eventId}")
+  .onCreate(async (snap, context) => {
+    const newEvent = snap.data();
+    const eventId = context.params.eventId;
+
+    console.log("🚀 New event created!");
+
+    try {
+      const tokensSnapshot = await admin.firestore().collection("tokens").get();
+      const tokens = [];
+
+      tokensSnapshot.forEach(doc => {
+        if (doc.id !== newEvent.userId) {
+          const token = doc.data().token;
+          if (token) tokens.push(token);
+        }
+      });
+
+      if (tokens.length === 0) {
+        console.log("❌ No tokens to notify.");
+        return null;
+      }
+
+      const message = {
+        notification: {
+          title: `New Event: ${newEvent.title}`,
+          body: newEvent.locationAddress || "Tap to view details",
+        },
+        data: {
+          eventId: eventId
+        },
+      };
+
+      // ✅ Changed from sendMulticast to sendEachForMulticast
+      const response = await admin.messaging().sendEachForMulticast({
+        ...message,
+        tokens,
+      });
+
+      console.log(`✅ Notifications sent: ${response.successCount}`);
+      return response;
+    } catch (error) {
+      console.error("🔥 Error sending FCM notifications:", error);
+      return null;
+    }
+  });

@@ -1,6 +1,10 @@
 package gautam.projects.event_hive.core.Navigation
 
 sealed class Routes(val route: String) {
+
+    object HomeScreen : Routes("home")
+    object ProfileScreen : Routes("profile")
+    object MapScreen : Routes("map")
     object SplashScreen : Routes("splash")
     object AuthScreen : Routes("auth")
     object BottomNavigation : Routes("main_app")
@@ -17,5 +21,13 @@ sealed class Routes(val route: String) {
         fun createRoute(eventId: String) = "event_info/$eventId"
     }
     object AddEventScreen : Routes("add_event")
+
+    object ConfirmScreen : Routes("confirm/{eventId}/{quantity}/{amount}") {
+        fun createRoute(eventId: String, quantity: Int, amount: Int) = "confirm/$eventId/$quantity/$amount"
+    }
+    object SettingScreen:Routes("settings")
+
+
+
 
 }

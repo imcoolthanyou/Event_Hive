@@ -32,9 +32,10 @@ import org.osmdroid.views.overlay.Marker
 @Composable
 fun MapScreen(
     eventsViewModel: EventsViewModel = viewModel(),
+    sharedViewModel: SharedViewModel = viewModel()
 
     ) {
-    val  sharedViewModel: SharedViewModel = viewModel()
+
     val context = LocalContext.current
     val nearbyEvents by eventsViewModel.nearbyEvents.collectAsState()
     val initialTargetState by sharedViewModel.initialMapTarget.collectAsState()

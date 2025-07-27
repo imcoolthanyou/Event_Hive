@@ -5,8 +5,12 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.Firebase
+import com.google.firebase.app
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.firestore
+import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.functions.FirebaseFunctions
 import gautam.projects.event_hive.Data.Repository.EventsRepository
 import gautam.projects.event_hive.Data.Repository.ProfileRepository
@@ -23,7 +27,7 @@ import java.util.*
 
 class EventsViewModel : ViewModel() {
 
-     val userId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    val userId = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
 
     private val eventsRepository = EventsRepository()
     private val profileRepository = ProfileRepository()
@@ -48,6 +52,21 @@ class EventsViewModel : ViewModel() {
 
     private val _razorpayOrderResponse = MutableStateFlow<Map<String, Any>?>(null)
     val razorpayOrderResponse = _razorpayOrderResponse.asStateFlow()
+
+    // Search-related state flows
+    private val _searchResults = MutableStateFlow<List<SingleEvent>>(emptyList())
+    val searchResults: StateFlow<List<SingleEvent>> = _searchResults.asStateFlow()
+
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    // Debounce mechanism for real-time search
+    private var searchJob: kotlinx.coroutines.Job? = null
+
+    val savedEvent= eventsRepository.savedEvents.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -152,6 +171,119 @@ class EventsViewModel : ViewModel() {
         FirebaseAuth.getInstance().signOut()
     }
 
+    // Real-time search function with debouncing
+    fun searchEventsRealTime(query: String) {
+        // Cancel previous search job
+        searchJob?.cancel()
+
+        _searchQuery.value = query
+
+        if (query.isBlank()) {
+            _searchResults.value = emptyList()
+            _isSearching.value = false
+            return
+        }
+
+        // Start new search job with debouncing
+        searchJob = viewModelScope.launch {
+            // Wait for 300ms before starting search (debouncing)
+            kotlinx.coroutines.delay(300)
+            performSearch(query)
+        }
+    }
+
+    // Immediate search function (for when user presses search or selects suggestion)
+    fun searchEvents(query: String) {
+        searchJob?.cancel()
+        _searchQuery.value = query
+
+        if (query.isBlank()) {
+            _searchResults.value = emptyList()
+            _isSearching.value = false
+            return
+        }
+
+        viewModelScope.launch {
+            performSearch(query)
+        }
+    }
+
+    // Core search implementation
+    private suspend fun performSearch(query: String) {
+        _isSearching.value = true
+
+        try {
+            val db = Firebase.firestore
+            val searchTerms = query.lowercase().trim().split(" ").filter { it.isNotBlank() }
+
+            // Get all events from Firestore
+            val eventsSnapshot = db.collection("events").get().await()
+            val allEvents = eventsSnapshot.documents.mapNotNull { doc ->
+                try {
+                    doc.toObject(SingleEvent::class.java)?.copy(id = doc.id)
+                } catch (e: Exception) {
+                    Log.e("EventsViewModel", "Error parsing event: ${doc.id}", e)
+                    null
+                }
+            }
+
+            // Filter events based on comprehensive search criteria
+            val filteredEvents = allEvents.filter { event ->
+                searchTerms.any { term ->
+                    // Search in title (highest priority)
+                    event.title.lowercase().contains(term) ||
+                            // Search in description
+                            event.description.lowercase().contains(term) ||
+                            // Search in location address
+                            event.locationAddress.lowercase().contains(term) ||
+
+                            // Search by city/area (extract from address)
+                            extractCityFromAddress(event.locationAddress).lowercase().contains(term)
+                }
+            }.filter {
+                // Only show future events
+                isFutureOrToday(it.date)
+            }.sortedWith(
+                compareByDescending<SingleEvent> { event ->
+                    // Prioritize exact matches in title
+                    when {
+                        event.title.lowercase().contains(query.lowercase()) -> 3
+                        event.locationAddress.lowercase().contains(query.lowercase()) -> 2
+                        event.description.lowercase().contains(query.lowercase()) -> 1
+                        else -> 0
+                    }
+                }.thenBy { parseDate(it.date) }
+            )
+
+            _searchResults.value = filteredEvents
+
+        } catch (e: Exception) {
+            Log.e("EventsViewModel", "Error searching events", e)
+            _searchResults.value = emptyList()
+        } finally {
+            _isSearching.value = false
+        }
+    }
+
+    // Helper function to extract city from address
+    private fun extractCityFromAddress(address: String): String {
+        // Split by comma and take relevant parts
+        val parts = address.split(",")
+        return if (parts.size >= 2) {
+            parts[parts.size - 2].trim() // Usually city is second last part
+        } else {
+            address
+        }
+    }
+
+    // Clear search results
+    fun clearSearchResults() {
+        _searchResults.value = emptyList()
+        _searchQuery.value = ""
+    }
+
+
+
     private fun parseDate(dateString: String): Date? {
         return try {
             SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).parse(dateString)
@@ -169,5 +301,15 @@ class EventsViewModel : ViewModel() {
             set(Calendar.MILLISECOND, 0)
         }
         return !eventDate.before(today.time)
+    }
+    fun toggleSave(event: SingleEvent){
+        viewModelScope.launch {
+           eventsRepository.toggleSavedEvent(event)
+        }
+    }
+    fun fetchSavedEvents() {
+        viewModelScope.launch {
+            eventsRepository.fetchSavedEvents()
+        }
     }
 }

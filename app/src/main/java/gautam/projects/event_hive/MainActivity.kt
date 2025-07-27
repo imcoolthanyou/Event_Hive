@@ -13,13 +13,21 @@ import androidx.activity.compose.setContent
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.cloudinary.android.MediaManager
+import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.auth
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.firestore
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.messaging.messaging
+import com.razorpay.PaymentResultListener
+import gautam.projects.event_hive.Presntation.screens.PaymentCallbackHelper
 import gautam.projects.event_hive.core.Navigation.NavigationControl
 import gautam.projects.event_hive.ui.theme.EventHiveTheme
 import org.osmdroid.config.Configuration
 
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), PaymentResultListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,6 +41,27 @@ class MainActivity : ComponentActivity() {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
             }
         }
+        // ✅ Ensure token is always refreshed and saved on every app launch
+        val user = Firebase.auth.currentUser
+        if (user != null) {
+            Firebase.messaging.token.addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val token = task.result
+                    Firebase.firestore.collection("tokens")
+                        .document(user.uid)
+                        .set(mapOf("token" to token))
+                        .addOnSuccessListener {
+                            println("✅ Token saved to Firestore for ${user.uid}")
+                        }
+                        .addOnFailureListener {
+                            println("❌ Failed to save token: ${it.message}")
+                        }
+                } else {
+                    println("❌ Failed to get FCM token: ${task.exception?.message}")
+                }
+            }
+        }
+
 
         // Initialize Cloudinary MediaManager
         try {
@@ -57,14 +86,23 @@ class MainActivity : ComponentActivity() {
         setContent {
             EventHiveTheme {
                 // Get the eventId from the notification intent
-                val eventId = intent?.getStringExtra("event_id")
-                NavigationControl(startEventId = eventId)
+                val eventId = intent?.getStringExtra("eventId") ?: intent?.getStringExtra("event_id")
+                val navigateTo = intent?.getStringExtra("navigateTo")
+                NavigationControl(startEventId = eventId,
+                    navigateTo = navigateTo)
             }
         }
     }
 
-    // ✅ FIX: Removed the onPaymentSuccess and onPaymentError functions.
-    // They are correctly handled in the TicketScreen composable via the PaymentCallbackHelper.
+    override fun onPaymentSuccess(p0: String?) {
+        PaymentCallbackHelper.onPaymentSuccess(p0?:"N/A")
+    }
+
+    override fun onPaymentError(p0: Int, p1: String?) {
+        val errorMessage = p1 ?: "Payment failed. Please try again."
+        PaymentCallbackHelper.onPaymentError(errorMessage)
+    }
+
 }
 
 /**

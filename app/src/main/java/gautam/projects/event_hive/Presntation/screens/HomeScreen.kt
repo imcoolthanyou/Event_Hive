@@ -1,3 +1,5 @@
+// File: gautam/projects/event_hive/Presntation/screens/HomeScreen.kt
+// (Note: Package name typo Presntation)
 package gautam.projects.event_hive.Presntation.screens
 
 import androidx.compose.foundation.Image
@@ -9,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert // Add this import for the menu icon
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -47,16 +50,15 @@ fun HomeScreen(
     navController: NavController,
     viewModel: EventsViewModel = viewModel(),
     sharedViewModel: SharedViewModel = viewModel(),
-    onViewOnMapClick: () -> Unit
+    onViewOnMapClick: () -> Unit,
+    onSearchClick: () -> Unit,
+    onProfileClick: () -> Unit,
+    onMyEventsClick: () -> Unit
 ) {
     val upcomingEvents by viewModel.upcomingEvents.collectAsState()
     val nearbyEvents by viewModel.nearbyEvents.collectAsState()
-
     var selectedDate by remember { mutableStateOf(Calendar.getInstance().time) }
-
-    val currentUserId =viewModel.userId
-
-
+    val currentUserId = viewModel.userId
     val filteredEvents = remember(selectedDate, upcomingEvents, currentUserId) {
         val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
         val selectedDateStr = sdf.format(selectedDate)
@@ -64,15 +66,18 @@ fun HomeScreen(
             it.date == selectedDateStr && it.createdBy != currentUserId
         }
     }
-
     val nearbyPreviewEvent = remember(filteredEvents, nearbyEvents, currentUserId) {
         filteredEvents.firstOrNull { event ->
-            event.createdBy!= currentUserId && nearbyEvents.any { nearby -> nearby.id == event.id }
+            event.createdBy != currentUserId && nearbyEvents.any { nearby -> nearby.id == event.id }
         }
     }
-
+    LaunchedEffect(Unit) {
+        val testLatitude = 23.2599
+        val testLongitude = 77.4126
+        viewModel.fetchNearbyEvents(testLatitude, testLongitude)
+    }
     Scaffold(
-        topBar = { HomeTopBar(navController) },
+        topBar = { HomeTopBar(navController, onSearchClick, onProfileClick) },
         containerColor = Color.White
     ) { padding ->
         LazyColumn(
@@ -85,7 +90,9 @@ fun HomeScreen(
                 SectionHeader(
                     title = "Upcoming Events",
                     actionText = "My Events",
-                    onActionClick = { /* TODO: Navigate to My Events screen */ }
+                    onActionClick = {
+                        onMyEventsClick()
+                    }
                 )
             }
             item {
@@ -104,9 +111,19 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(filteredEvents, key = { it.id }) { event ->
-                            UpcomingEventCard(event = event, onEventClick = {
-                                navController.navigate(Routes.EventInfoScreen.createRoute(event.id))
-                            })
+                            UpcomingEventCard(
+                                event = event,
+                                onEventClick = {
+                                    // Ensure event.id is not null or blank before navigating
+                                    if (!event.id.isNullOrBlank()) {
+                                        navController.navigate(Routes.TicketScreen.createRoute(event.id))
+                                    } else {
+                                        // Log or show an error if event.id is invalid
+                                        println("Error: Event ID is null or blank for event: ${event.title}")
+                                    }
+                                },
+                                onSaveClick = { saveEvent -> viewModel.toggleSave(saveEvent) }
+                            )
                         }
                     }
                 }
@@ -118,7 +135,12 @@ fun HomeScreen(
                     onActionClick = {
                         // Set the target for the MapScreen before navigating
                         sharedViewModel.setInitialMapTarget(
-                            target = nearbyPreviewEvent?.let { GeoPoint(it.latitude, it.longitude) },
+                            target = nearbyPreviewEvent?.let {
+                                GeoPoint(
+                                    it.latitude,
+                                    it.longitude
+                                )
+                            },
                             zoomToFitAll = if (nearbyPreviewEvent == null) nearbyEvents else emptyList()
                         )
                         onViewOnMapClick() // This switches the tab in BottomNavigation
@@ -132,16 +154,20 @@ fun HomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeTopBar(navController: NavController) {
+fun HomeTopBar(
+    navController: NavController,
+    onSearchClick: () -> Unit,
+    onProfileClick: () -> Unit
+) {
     TopAppBar(
         title = { Text("Event Hive", fontWeight = FontWeight.Bold, color = Color.Black) },
         navigationIcon = {
-            IconButton(onClick = { navController.navigate("Profile") }) {
+            IconButton(onClick = { onProfileClick() }) {
                 Icon(Icons.Default.Person, contentDescription = "Profile")
             }
         },
         actions = {
-            IconButton(onClick = { navController.navigate(Routes.SearchScreen.route) }) {
+            IconButton({ onSearchClick() }) {
                 Icon(Icons.Default.Search, contentDescription = "Search")
             }
             IconButton(onClick = { navController.navigate(Routes.NotificationScreen.route) }) {
@@ -164,14 +190,14 @@ fun CalendarView(selectedDate: Date, onDateSelected: (Date) -> Unit) {
     val dayFormat = SimpleDateFormat("EEE", Locale.getDefault())
     val dateFormat = SimpleDateFormat("dd", Locale.getDefault())
     val selectedDayFormat = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
-
     Column(modifier = Modifier.padding(vertical = 8.dp)) {
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(dates) { date ->
-                val isSelected = selectedDayFormat.format(date) == selectedDayFormat.format(selectedDate)
+                val isSelected =
+                    selectedDayFormat.format(date) == selectedDayFormat.format(selectedDate)
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
@@ -218,49 +244,88 @@ fun SectionHeader(title: String, actionText: String, onActionClick: () -> Unit) 
     }
 }
 
+// --- REVISED UpcomingEventCard ---
 @Composable
-fun UpcomingEventCard(event: SingleEvent, onEventClick: () -> Unit) {
+fun UpcomingEventCard(
+    event: SingleEvent,
+    onEventClick: () -> Unit, // For navigating to TicketScreen
+    onSaveClick: (SingleEvent) -> Unit // For saving the event
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    // The entire Card is now clickable for navigation
     Card(
         modifier = Modifier
             .width(220.dp)
             .height(250.dp)
-            .clickable(onClick = onEventClick),
+            .clickable(onClick = onEventClick), // Main click handler for navigation
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column {
-            Image(
-                painter = rememberAsyncImagePainter(
-                    model = event.imageUrls.firstOrNull(),
-                    error = painterResource(id = R.drawable.placeholder_event)
-                ),
-                contentDescription = event.title,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(150.dp),
-                contentScale = ContentScale.Crop
-            )
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = event.title,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+        Box(modifier = Modifier.fillMaxSize()) { // Use Box to position elements
+            Column(modifier = Modifier.fillMaxSize()) { // Main content column
+                // Image section
+                Box(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+                    Image(
+                        painter = rememberAsyncImagePainter(
+                            model = event.imageUrls.firstOrNull(),
+                            error = painterResource(id = R.drawable.placeholder_event)
+                        ),
+                        contentDescription = event.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    // Menu button positioned at the top end of the image
+                    IconButton(
+                        onClick = { showMenu = true }, // Show menu on click
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More options"
+                        )
+                    }
+                }
+
+                // Text details section
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = event.title,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = event.locationAddress,
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Dropdown Menu
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Save") },
+                    onClick = {
+                        showMenu = false
+                        onSaveClick(event)
+                    }
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = event.locationAddress,
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                // You can add more menu items here if needed
             }
         }
     }
 }
+// --- END REVISED UpcomingEventCard ---
 
 @Composable
 fun NearbyEventsPreview(nearbyEvent: SingleEvent?) {
