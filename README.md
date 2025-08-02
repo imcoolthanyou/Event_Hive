@@ -1,4 +1,4 @@
-# Event Hive 🐝
+# Event Hive 
 
 ![Event Hive App Banner](/.github/images/app_banner.png)
 
