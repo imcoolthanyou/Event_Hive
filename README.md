@@ -2,9 +2,23 @@
 
 ![Event Hive App Banner](/.github/images/app_banner.png)
 
-Event Hive is a modern, feature-rich Android application for discovering, creating, and managing local events. Built entirely with Kotlin and Jetpack Compose, it provides a seamless, real-time experience for both event organizers and attendees, complete with a dynamic map, user authentication, and a secure (test mode) ticket booking flow.
+Event Hive is a modern, feature-rich Android application for discovering, creating, and managing local events. Built entirely with Kotlin and Jetpack Compose, it provides a seamless, real-time experience for both event organizers and attendees, complete with a dynamic map, user authentication, and a secure ticket booking flow.
 
 This project was built from the ground up to demonstrate a full-stack mobile development process, incorporating a clean MVVM architecture, a live Firebase backend, and a professional, user-centric UI.
+
+---
+
+## 🚀 Download & Installation
+
+The latest version of the app is available for direct download from our GitHub Releases page.
+
+[![Download App](https://img.shields.io/badge/Download-v1.0.0-blue?style=for-the-badge&logo=android)](https://github.com/imcoolthanyou/Event_Hive/releases/tag/v1.0.0)
+
+**To install the app:**
+1.  Download the `app-release.zip` file from the link above.
+2.  Unzip the file to get the `app-release.apk` file.
+3.  Transfer the `.apk` file to your Android device.
+4.  Open the file on your device and follow the prompts to install. You may need to allow installations from "unknown sources" in your phone's settings.
 
 ---
 
@@ -12,12 +26,12 @@ This project was built from the ground up to demonstrate a full-stack mobile dev
 
 * **Real-time Event Creation & Discovery:** Users can create their own events, including details, images, and ticket information, which are instantly saved to a live cloud database.
 * **User Authentication:** Secure sign-up and login functionality using **Firebase Authentication** with both Email/Password and Google Sign-In providers.
-* **Cloud-Based Image Hosting:** Integration with **Cloudinary** for robust, cloud-based image hosting and delivery, ensuring fast and efficient media handling.
-* **Dynamic Map View:** An interactive map screen built with **osmdroid** that displays events near the user based on a custom discovery radius set in their profile.
-* **Location Autocomplete & Geo-querying:** Smart location search powered by Android's Geocoder and a custom-built geo-querying system to find nearby events.
-* **Secure Ticket Booking Flow:** A complete, end-to-end ticket booking system that uses a **Firebase Cloud Function** to securely create payment orders with **Razorpay**.
-* **Modern, Declarative UI:** The entire user interface is built with **Jetpack Compose**, following Material Design principles for a clean, intuitive, and responsive experience.
-* **Clean Architecture:** The app is architected using the **MVVM pattern** (ViewModel, Repository) with StateFlow for reactive state management, ensuring a scalable and maintainable codebase.
+* **Cloud-Based Image Hosting:** Integration with **Cloudinary** for robust, cloud-based image hosting and delivery.
+* **Dynamic Map View:** An interactive map screen built with **osmdroid** that displays events near the user based on a custom discovery radius.
+* **Location Autocomplete & Geo-querying:** Smart location search powered by Android's Geocoder and a custom-built geo-querying system.
+* **Functional Ticket Booking Flow:** A complete, end-to-end ticket booking system that uses a **Firebase Cloud Function** to securely create payment orders. **Note:** This feature currently operates in **Test Mode** as a proof of concept.
+* **Modern, Declarative UI:** The entire user interface is built with **Jetpack Compose**, following Material Design principles for a clean and intuitive experience.
+* **Clean Architecture:** The app is architected using the **MVVM pattern** (ViewModel, Repository) with StateFlow for reactive state management.
 
 ---
 
@@ -51,9 +65,9 @@ This project was built from the ground up to demonstrate a full-stack mobile dev
 
 ---
 
-## 🚀 Installation & Setup
+## 👨‍💻 Build From Source
 
-To run this project locally, you will need to set up your own Firebase, Cloudinary, and Razorpay credentials.
+To build and run this project locally, you will need to set up your own Firebase, Cloudinary, and Razorpay credentials.
 
 **Prerequisites:**
 * Android Studio (latest version recommended)
@@ -93,4 +107,3 @@ To run this project locally, you will need to set up your own Firebase, Cloudina
         ```
 
 5.  **Build and Run:** Build the project in Android Studio. It should now run on your emulator or physical device.
-
